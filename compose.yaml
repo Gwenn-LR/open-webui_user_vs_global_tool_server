@@ -1,0 +1,51 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    network_mode: "host"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all 
+              capabilities: [gpu]
+  
+  open-webui:
+    image: "ghcr.io/open-webui/open-webui:main"
+    ports:
+      - 8080:8080
+    volumes:
+      - open-webui:/app/backend/data
+    restart: unless-stopped
+    network_mode: "host"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mcp_to_openapi_proxy:
+    build: compose/mcp_to_openapi_proxy
+    ports: 
+      - 8081:8081
+    network_mode: "host"
+    depends_on:
+      mcp_server:
+        condition: service_healthy
+
+  mcp_server:
+    build: 
+      context: .
+      dockerfile: compose/mcp_server/Dockerfile
+    ports: 
+      - 8082:8082
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/messages"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 1m
+      start_interval: 15s
+
+
+volumes:
+  open-webui:
+   external: true
